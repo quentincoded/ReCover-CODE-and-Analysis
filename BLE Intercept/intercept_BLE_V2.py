@@ -222,7 +222,7 @@ async def main():
     
     # Keep the main loop running until animation is stopped
     while animation_running:
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0.01)
         plt.pause(0.001)  # Allow matplotlib to process events
     
     # Wait for BLE task to complete
