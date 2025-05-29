@@ -2,8 +2,8 @@ from tabulate import tabulate
 
 # resistances=[500, 1000, 1800, 2000, 2200, 2400, 4000, 5000, 7000, 10000, 20000]
 resistances=[i for i in range(500, 300000, 1000)]
-r_var_min=49000 # 20k ohm
-r_var_max=200000 # 100k ohm
+r_var_min=200000
+r_var_max=60000
 v_bat=3.3
 
 def calc_fsr_bottom(r_var, resistance, v_bat):
