@@ -4,6 +4,7 @@ import seaborn as sns
 import numpy as np
 import os
 import textwrap # Import textwrap for wrapping long labels
+from matplotlib.patches import Patch # For custom legend icons
 
 # --- Configuration ---
 # IMPORTANT: Update this to your CSV file name!
@@ -47,9 +48,9 @@ likert_questions_cols = [
     if col not in non_likert_cols_to_exclude
 ]
 
-# Add a 'Respondent' column (e.g., 'Guy 1', 'Guy 2', etc.)
+
 # This assigns a unique identifier to each row (individual respondent)
-df_raw['Respondent'] = ['Guy ' + str(i + 1) for i in range(len(df_raw))]
+df_raw['Respondent'] = ['Patient ' + str(i + 1) for i in range(len(df_raw))]
 
 # Convert only identified Likert columns to numeric, coercing errors (e.g., empty strings) to NaN
 for col in likert_questions_cols:
@@ -73,7 +74,7 @@ ordered_questions_text = [q for q in likert_questions_cols if q in df_long['Ques
 df_long['Question'] = pd.Categorical(df_long['Question'], categories=ordered_questions_text, ordered=True)
 
 # Calculate the overall average score for each question across all respondents
-# FIX: Added observed=False to silence FutureWarning
+# Added observed=False to silence FutureWarning
 df_overall_averages = df_long.groupby('Question', observed=False)['Response_Score'].mean().reset_index()
 df_overall_averages.columns = ['Question', 'Overall_Average_Score']
 
@@ -84,37 +85,64 @@ df_overall_averages['Question'] = pd.Categorical(
     ordered=True
 )
 
+# --- Define specific questions to color blue for X-axis labels ---
+# Assuming 'row 8' and 'row 9' refer to the 8th and 9th question in the ordered list (0-indexed)
+# These are the indices of the questions whose labels will be blue
+blue_label_indices = []
+if len(ordered_questions_text) >= 8: # 8th question (index 7)
+    blue_label_indices.append(7)
+if len(ordered_questions_text) >= 9: # 9th question (index 8)
+    blue_label_indices.append(8)
+
+print(f"X-axis labels to be colored blue (indices): {blue_label_indices}")
+
 
 # --- 3. Plotting the data ---
-# FIX: Increased figure size slightly for better layout
-plt.figure(figsize=(20, 9))
+# Increased figure size slightly for better layout
+plt.figure(figsize=(20, 10))
+ax = plt.gca() # Get current axes for later manipulation
+
+# --- Color Customization ---
+# Use a named seaborn palette for the individual bars (reverting to full pastel palette)
+individual_bar_palette = 'plasma' 
+
+# Color for the overall average scatter point
+overall_average_color = 'red'
+# --- End Color Customization ---
+
 
 # Create the grouped bar plot
-# Each 'Question' gets a group of bars, and each bar within the group represents a 'Respondent'
+# Use the default pastel palette for all respondents
 sns.barplot(
     data=df_long,
     x='Question',
     y='Response_Score',
-    hue='Respondent', # This creates a separate bar for each 'Respondent'
-    palette='muted', # A nice pastel color palette for individual bars
-    edgecolor='gray', # Add a subtle edge to bars
+    hue='Respondent',
+    palette=individual_bar_palette, # Apply the chosen palette for individual bars
+    edgecolor='gray',
     linewidth=0.5,
-    alpha=0.8, # Make bars slightly transparent
-    errorbar=None # Do not show error bars for individual responses
+    alpha=0.8,
+    errorbar=None,
+    ax=ax # Assign to the pre-obtained axes
 )
+
+# --- Removed specific bar coloring logic here ---
+# This ensures all bars use the 'pastel' palette as requested.
+
 
 # Overlay the overall average points as a scatter plot
 sns.scatterplot(
     data=df_overall_averages,
     x='Question',
     y='Overall_Average_Score',
-    color='red',        # Set color to red
-    marker='D',         # Use diamond marker
-    s=200,              # Size of the diamond marker
-    label='Overall Average', # Label for the legend
-    zorder=5,           # Ensure scatter points are on top of bar plots
-    linewidth=1,        # Add a border to the diamond
-    edgecolor='black'   # Color of the diamond border
+    color=overall_average_color,
+    marker='D',
+    s=200,
+    label='Overall Average',
+    zorder=5,
+    linewidth=1,
+    edgecolor='black',
+    ax=ax # Assign to the pre-obtained axes
 )
 
 
@@ -129,51 +157,70 @@ likert_labels = {
     7: 'Strongly Agree'
 }
 
-# Set Y-axis ticks and labels
 plt.yticks(list(likert_labels.keys()), list(likert_labels.values()))
 plt.ylabel('Likert Scale Response (1-7)', fontsize=12)
-plt.ylim(0.5, 7.5) # Set limits to ensure all labels are visible
+plt.ylim(0.5, 7.5)
 
 # --- X-axis label wrapping and rotation ---
-# Adjust this value to control how wide each wrapped line of text can be
 max_width_question_label = 20
 wrapped_labels = [textwrap.fill(label, max_width_question_label) for label in ordered_questions_text]
 
 # Set X-axis ticks and labels with wrapping and rotation
 plt.xticks(ticks=range(len(ordered_questions_text)), labels=wrapped_labels, rotation=45, ha='right', fontsize=10)
+
+# --- Color X-axis labels based on `blue_label_indices` ---
+for i, tick_label in enumerate(ax.get_xticklabels()):
+    if i in blue_label_indices:
+        tick_label.set_color('blue')
+    else:
+        tick_label.set_color('black') # Ensure other labels are explicitly black
 # --- End X-axis label wrapping and rotation ---
 
 
 # Add titles
-plt.title('Responses to individual device related questions', fontsize=16, pad=20)
-# FIX: Adjusted y-position of suptitle to ensure it's within bounds
-# plt.suptitle('Questionnaire Results - Individual Bars with Overall Average Overlay', fontsize=20, y=1.03)
+plt.title('Individual Responses per Respondent and Overall Average per Question', fontsize=16, pad=20)
+plt.suptitle('Questionnaire Results - Individual Bars with Overall Average Overlay', fontsize=20, y=1.03)
 
-# --- Legend Handling ---
+# --- Legend Handling (Combined) ---
 # Get all handles and labels from the current plot
-handles, labels = plt.gca().get_legend_handles_labels()
+handles, labels = ax.get_legend_handles_labels()
 
 # Create a dictionary to map labels to their handles for easier sorting
 label_handle_map = dict(zip(labels, handles))
 
-# Define the desired order of labels in the legend
-# 'Overall Average' first, then 'Guy 1', 'Guy 2', etc.
-desired_label_order = ['Overall Average'] + sorted([l for l in labels if l.startswith('Guy')])
+# Define the desired order of labels in the legend: 'Overall Average' first, then 'Guy 1', 'Guy 2', etc.
+desired_label_order = ['Overall Average'] + sorted([l for l in labels if l.startswith('Patient')])
 
 # Create new lists of handles and labels in the desired order
 ordered_handles = [label_handle_map[label] for label in desired_label_order if label in label_handle_map]
 ordered_labels = [label for label in desired_label_order if label in label_handle_map]
 
 # Create a single legend with the combined and reordered items
-plt.legend(ordered_handles, ordered_labels, title='Metrics', bbox_to_anchor=(1.05, 1), loc='upper left')
-# --- End Legend Handling ---
+legend1 = ax.legend(ordered_handles, ordered_labels, title='Metrics', bbox_to_anchor=(1.01, 1), loc='upper left')
+ax.add_artist(legend1) # Add this legend back to the axes to prevent it from being overwritten
+
+# --- Add new legend for color interpretation (referring to text color) ---
+# Create custom legend handles for color interpretation with square icons
+color_legend_handles = [
+    # Patch for 'High = Good' (black text)
+    Patch(facecolor='black', edgecolor='black', label='High = Good'),
+    # Patch for 'Low = Good' (blue text)
+    Patch(facecolor='blue', edgecolor='black', label='Low = Good')
+]
+
+legend2 = ax.legend(handles=color_legend_handles,
+                   title='Interpretation of Scores',
+                   bbox_to_anchor=(1.01, -0.1), # Position this legend below the first one
+                   loc='center left',
+                   frameon=True)
+ax.add_artist(legend2)
 
 
 # Add a subtle horizontal grid
 plt.grid(axis='y', linestyle='--', alpha=0.7)
 
 # Adjust layout to prevent labels from being cut off, making space for the legend(s)
-# FIX: Increased right margin slightly to ensure legends fit
-plt.tight_layout(rect=[0, 0.05, 0.88, 0.95])
+# Increased right margin more to accommodate two legends
+plt.tight_layout(rect=[0, 0.05, 0.85, 0.95])
 
 plt.show()
